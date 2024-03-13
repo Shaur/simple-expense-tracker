@@ -1,0 +1,9 @@
+version: '3.8'
+services:
+  tracker-database:
+    build: database
+    container_name: tracker-database
+    environment:
+      POSTGRES_PASSWORD: tracker
+    ports:
+      - '5432:5432'
