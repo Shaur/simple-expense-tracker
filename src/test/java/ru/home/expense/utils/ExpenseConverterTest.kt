@@ -31,18 +31,6 @@ class ExpenseConverterTest {
     )
 
     @Test
-    fun `convert expense to dto java`() {
-        val actualDto = ExpenseConverterJava.convertTo(expense)
-        assertThat(actualDto).isEqualTo(expectedDto)
-    }
-
-    @Test
-    fun `convert expense to dto kotlin`() {
-        val actualDto = ExpenseConverterKotlin.convertTo(expense)
-        assertThat(actualDto).isEqualTo(expectedDto)
-    }
-
-    @Test
     fun `convert expense to dto by extension`() {
         assertThat(expense.toDto()).isEqualTo(expectedDto)
     }

@@ -1,78 +1,72 @@
-package ru.home.expense.configuration;
+package ru.home.expense.configuration
 
-import io.jsonwebtoken.JwtException;
-import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.security.Keys;
-import jakarta.servlet.FilterChain;
-import jakarta.servlet.ServletException;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
-import org.springframework.security.authentication.CredentialsExpiredException;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.stereotype.Component;
-import org.springframework.web.filter.OncePerRequestFilter;
-import ru.home.expense.configuration.properties.AuthenticationProperties;
-import ru.home.expense.repository.TokenRepository;
-
-import java.io.IOException;
+import io.jsonwebtoken.Jwts
+import io.jsonwebtoken.security.Keys
+import jakarta.servlet.FilterChain
+import jakarta.servlet.http.HttpServletRequest
+import jakarta.servlet.http.HttpServletResponse
+import org.springframework.security.authentication.CredentialsExpiredException
+import org.springframework.security.core.Authentication
+import org.springframework.security.core.context.SecurityContextHolder
+import org.springframework.stereotype.Component
+import org.springframework.web.filter.OncePerRequestFilter
+import ru.home.expense.configuration.properties.AuthenticationProperties
+import ru.home.expense.repository.TokenRepository
+import java.nio.charset.StandardCharsets
 
 @Component
-public class BearerAuthorizationFilter extends OncePerRequestFilter {
+class BearerAuthorizationFilter(
+    private val tokenRepository: TokenRepository,
+    properties: AuthenticationProperties
+) : OncePerRequestFilter() {
 
-    private static final String TOKEN_HEADER = "Authorization";
-    private static final String TOKEN_PREFIX = "Bearer ";
+    private val secret = properties.secretKey
 
-    private final TokenRepository tokenRepository;
-
-    private final String secret;
-
-    public BearerAuthorizationFilter(
-            TokenRepository tokenRepository,
-            AuthenticationProperties properties
+    override fun doFilterInternal(
+        request: HttpServletRequest,
+        response: HttpServletResponse,
+        filterChain: FilterChain
     ) {
-        this.tokenRepository = tokenRepository;
-        this.secret = properties.getSecretKey();
-    }
-
-    @Override
-    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
-        var accessToken = resolveToken(request);
+        val accessToken = resolveToken(request)
         if (accessToken == null) {
-            filterChain.doFilter(request, response);
-            return;
+            filterChain.doFilter(request, response)
+            return
         }
 
-        var hmacKey = Keys.hmacShaKeyFor(secret.getBytes("UTF-8"));
+        val hmacKey = Keys.hmacShaKeyFor(secret.toByteArray(StandardCharsets.UTF_8))
         try {
-            var parser = Jwts.parser()
-                    .verifyWith(hmacKey)
-                    .build();
+            val parser = Jwts.parser()
+                .verifyWith(hmacKey)
+                .build()
 
-            parser.parse(accessToken);
-        } catch (JwtException | IllegalArgumentException e) {
-            filterChain.doFilter(request, response);
-            return;
+            parser.parse(accessToken)
+        } catch (e: RuntimeException) {
+            filterChain.doFilter(request, response)
+            return
         }
 
-        var token = tokenRepository.findByValue(accessToken);
-        if (token == null || token.expireAt() < System.currentTimeMillis()) {
-            throw new CredentialsExpiredException("Token expired");
+        val token = tokenRepository.findByValue(accessToken)
+        if (token == null || token.expireAt < System.currentTimeMillis()) {
+            throw CredentialsExpiredException("Token expired")
         }
 
-        Authentication authentication = new AuthenticationContext(token.name(), token.userId());
-        SecurityContextHolder.getContext().setAuthentication(authentication);
+        val authentication: Authentication = AuthenticationContext(token.name, token.userId)
+        SecurityContextHolder.getContext().authentication = authentication
 
-        filterChain.doFilter(request, response);
+        filterChain.doFilter(request, response)
     }
 
-    public String resolveToken(HttpServletRequest request) {
-        String bearerToken = request.getHeader(TOKEN_HEADER);
+    fun resolveToken(request: HttpServletRequest): String? {
+        val bearerToken = request.getHeader(TOKEN_HEADER)
         if (bearerToken != null && bearerToken.startsWith(TOKEN_PREFIX)) {
-            return bearerToken.substring(TOKEN_PREFIX.length());
+            return bearerToken.substring(TOKEN_PREFIX.length)
         }
 
-        return null;
+        return null
     }
 
+    companion object {
+        private const val TOKEN_HEADER = "Authorization"
+        private const val TOKEN_PREFIX = "Bearer "
+    }
 }
